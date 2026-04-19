@@ -17,11 +17,11 @@ import (
 const maxPromptChars = 40
 
 var (
-	apiURL       = envStr("INFERENCE_URL", "https://integrate.api.nvidia.com/v1/chat/completions")
-	apiModel     = envStr("INFERENCE_MODEL", "nvidia/llama-3.1-nemotron-nano-vl-8b-v1")
-	apiKey       = firstNonEmpty(os.Getenv("NVIDIA_API_KEY"), os.Getenv("INFERENCE_API_KEY"), os.Getenv("GROQ_API_KEY"))
-	maxTokens    = envInt("MAX_TOKENS", 4096)
-	tokensPerMin = envInt("TPM_LIMIT", 1_000_000)
+	apiURL       = envStr("INFERENCE_URL", "https://api.groq.com/openai/v1/chat/completions")
+	apiModel     = envStr("INFERENCE_MODEL", "llama-3.1-8b-instant")
+	apiKey       = firstNonEmpty(os.Getenv("GROQ_API_KEY"), os.Getenv("INFERENCE_API_KEY"), os.Getenv("NVIDIA_API_KEY"))
+	maxTokens    = envInt("MAX_TOKENS", 2048)
+	tokensPerMin = envInt("TPM_LIMIT", 6000)
 )
 
 func envStr(k, d string) string {
@@ -333,7 +333,7 @@ func main() {
 	})
 
 	if apiKey == "" {
-		log.Println("warn: no API key set (NVIDIA_API_KEY / INFERENCE_API_KEY) — /g requests will fail")
+		log.Println("warn: no API key set (GROQ_API_KEY / INFERENCE_API_KEY) — /g requests will fail")
 	}
 	port := os.Getenv("PORT")
 	if port == "" {
