@@ -14,16 +14,31 @@ import (
 	"time"
 )
 
-const (
-	maxPromptChars = 40
-	groqURL        = "https://api.groq.com/openai/v1/chat/completions"
-	groqModel      = "llama-3.1-8b-instant"
-)
+const maxPromptChars = 40
 
 var (
-	maxTokens    = envInt("MAX_TOKENS", 2048)
-	tokensPerMin = envInt("TPM_LIMIT", 6000)
+	apiURL       = envStr("INFERENCE_URL", "https://integrate.api.nvidia.com/v1/chat/completions")
+	apiModel     = envStr("INFERENCE_MODEL", "nvidia/llama-3.1-nemotron-nano-vl-8b-v1")
+	apiKey       = firstNonEmpty(os.Getenv("NVIDIA_API_KEY"), os.Getenv("INFERENCE_API_KEY"), os.Getenv("GROQ_API_KEY"))
+	maxTokens    = envInt("MAX_TOKENS", 4096)
+	tokensPerMin = envInt("TPM_LIMIT", 1_000_000)
 )
+
+func envStr(k, d string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return d
+}
+
+func firstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 func envInt(k string, d int) int {
 	if v := os.Getenv(k); v != "" {
@@ -85,13 +100,13 @@ type message struct {
 	Content string `json:"content"`
 }
 
-type groqReq struct {
+type chatReq struct {
 	Model     string    `json:"model"`
 	Messages  []message `json:"messages"`
 	MaxTokens int       `json:"max_tokens"`
 }
 
-type groqResp struct {
+type chatResp struct {
 	Choices []struct {
 		Message message `json:"message"`
 	} `json:"choices"`
@@ -104,17 +119,18 @@ func generate(prompt string) (string, error) {
 	if !limiter.allow() {
 		return "", fmt.Errorf("global rate limit hit (%d tokens/min). try again in a minute.", tokensPerMin)
 	}
-	body, _ := json.Marshal(groqReq{
-		Model: groqModel,
+	body, _ := json.Marshal(chatReq{
+		Model: apiModel,
 		Messages: []message{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: prompt},
 		},
 		MaxTokens: maxTokens,
 	})
-	req, _ := http.NewRequest("POST", groqURL, bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("GROQ_API_KEY"))
+	req, _ := http.NewRequest("POST", apiURL, bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
@@ -122,17 +138,17 @@ func generate(prompt string) (string, error) {
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("groq %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+		return "", fmt.Errorf("inference %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
 	}
-	var gr groqResp
-	if err := json.Unmarshal(raw, &gr); err != nil {
+	var cr chatResp
+	if err := json.Unmarshal(raw, &cr); err != nil {
 		return "", err
 	}
-	limiter.add(gr.Usage.TotalTokens)
-	if len(gr.Choices) == 0 {
+	limiter.add(cr.Usage.TotalTokens)
+	if len(cr.Choices) == 0 {
 		return "", fmt.Errorf("empty response")
 	}
-	return gr.Choices[0].Message.Content, nil
+	return cr.Choices[0].Message.Content, nil
 }
 
 var indexTmpl = template.Must(template.New("i").Parse(`<!doctype html>
@@ -316,10 +332,13 @@ func main() {
 		})
 	})
 
+	if apiKey == "" {
+		log.Println("warn: no API key set (NVIDIA_API_KEY / INFERENCE_API_KEY) — /g requests will fail")
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("listening on :%s", port)
+	log.Printf("listening on :%s  model=%s", port, apiModel)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

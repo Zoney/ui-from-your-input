@@ -2,32 +2,39 @@
 
 Type up to 40 characters. An LLM writes the HTML. Click links to go deeper — each click generates a new page. No other input, only clicks.
 
-Powered by [Groq](https://console.groq.com/docs/model/llama-3.1-8b-instant) (`llama-3.1-8b-instant`). ~200 lines of Go, stdlib only.
+Default backend is the [NVIDIA API Catalog](https://build.nvidia.com/) (`nvidia/llama-3.1-nemotron-nano-vl-8b-v1`). Any OpenAI-compatible endpoint works — see env vars below. ~200 lines of Go, stdlib only.
 
 ## Run locally
 
 ```sh
-export GROQ_API_KEY=gsk_...
+export NVIDIA_API_KEY=nvapi-...
 go run .
 # open http://localhost:8080
 ```
+
+Get a key at <https://build.nvidia.com/> (free credits).
 
 ## Deploy (Railway, Fly, anything with Docker)
 
 ```sh
 docker build -t ui-from-your-input .
-docker run -e GROQ_API_KEY=gsk_... -p 8080:8080 ui-from-your-input
+docker run -e NVIDIA_API_KEY=nvapi-... -p 8080:8080 ui-from-your-input
 ```
 
-On Railway: new project → deploy from GitHub repo → set `GROQ_API_KEY` env var. The Dockerfile is picked up automatically.
+On Railway: new project → deploy from GitHub repo → set `NVIDIA_API_KEY`. The Dockerfile is picked up automatically.
 
-## Limits
+## Configuration
 
-- Prompt: max 40 characters (enforced server-side).
-- `MAX_TOKENS` per request (env, default `2048`). Must fit inside your Groq account's per-request TPM budget.
-- `TPM_LIMIT` global throttle across all users (env, default `6000`, matching Groq's free tier). When hit, requests get a 429 until the next minute.
+| Env var | Default | Purpose |
+| --- | --- | --- |
+| `NVIDIA_API_KEY` / `INFERENCE_API_KEY` | _(required)_ | Bearer token sent to the inference endpoint. |
+| `INFERENCE_URL` | `https://integrate.api.nvidia.com/v1/chat/completions` | OpenAI-compatible chat completions endpoint. |
+| `INFERENCE_MODEL` | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | Model id passed in the request body. |
+| `MAX_TOKENS` | `4096` | `max_tokens` per request. |
+| `TPM_LIMIT` | `1000000` | Global tokens/min cap across all users. Returns 429 when hit. |
+| `PORT` | `8080` | HTTP listen port. |
 
-Bump both env vars if you're on a paid Groq tier — e.g. `MAX_TOKENS=10000 TPM_LIMIT=1000000`.
+Swap providers by changing `INFERENCE_URL` + `INFERENCE_MODEL` + key — e.g. point it at Groq, OpenRouter, a self-hosted vLLM, or your own NIM container. Prompt is always capped to 40 characters server-side.
 
 ## How it works
 
