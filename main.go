@@ -16,11 +16,24 @@ import (
 
 const (
 	maxPromptChars = 40
-	maxTokens      = 10000
-	tokensPerMin   = 1_000_000
 	groqURL        = "https://api.groq.com/openai/v1/chat/completions"
 	groqModel      = "llama-3.1-8b-instant"
 )
+
+var (
+	maxTokens    = envInt("MAX_TOKENS", 2048)
+	tokensPerMin = envInt("TPM_LIMIT", 6000)
+)
+
+func envInt(k string, d int) int {
+	if v := os.Getenv(k); v != "" {
+		var n int
+		if _, err := fmt.Sscanf(v, "%d", &n); err == nil && n > 0 {
+			return n
+		}
+	}
+	return d
+}
 
 const systemPrompt = `You generate HTML UI fragments from a short user prompt.
 
@@ -83,7 +96,7 @@ type groqResp struct {
 
 func generate(prompt string) (string, error) {
 	if !limiter.allow() {
-		return "", fmt.Errorf("global rate limit hit (1M tokens/min). try again in a minute.")
+		return "", fmt.Errorf("global rate limit hit (%d tokens/min). try again in a minute.", tokensPerMin)
 	}
 	body, _ := json.Marshal(groqReq{
 		Model: groqModel,

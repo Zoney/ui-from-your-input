@@ -24,8 +24,10 @@ On Railway: new project → deploy from GitHub repo → set `GROQ_API_KEY` env v
 ## Limits
 
 - Prompt: max 40 characters (enforced server-side).
-- Generation: `max_tokens=10000` per request.
-- Global throttle: 1,000,000 tokens / minute across all users combined. When hit, requests get a 429 until the next minute.
+- `MAX_TOKENS` per request (env, default `2048`). Must fit inside your Groq account's per-request TPM budget.
+- `TPM_LIMIT` global throttle across all users (env, default `6000`, matching Groq's free tier). When hit, requests get a 429 until the next minute.
+
+Bump both env vars if you're on a paid Groq tier — e.g. `MAX_TOKENS=10000 TPM_LIMIT=1000000`.
 
 ## How it works
 
