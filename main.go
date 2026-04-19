@@ -130,24 +130,89 @@ func generate(prompt string) (string, error) {
 }
 
 var indexTmpl = template.Must(template.New("i").Parse(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>ui from your input</title>
+<html><head><meta charset="utf-8"><title>~ UI FROM YOUR INPUT ~ :: Welcome!!! ::</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body{font-family:system-ui,sans-serif;max-width:640px;margin:10vh auto;padding:0 20px;color:#111}
-  h1{font-weight:500;font-size:28px;margin:0 0 8px}
-  p{color:#555;margin:0 0 24px}
-  input{font-size:20px;padding:12px 14px;width:100%;box-sizing:border-box;border:1px solid #ccc;border-radius:6px}
-  input:focus{outline:none;border-color:#06c}
-  small{color:#888;display:block;margin-top:8px}
-  a{color:#06c}
+  @keyframes blink{50%{visibility:hidden}}
+  @keyframes rainbow{0%{color:#f00}16%{color:#ff0}33%{color:#0f0}50%{color:#0ff}66%{color:#00f}83%{color:#f0f}100%{color:#f00}}
+  body{
+    font-family:"Times New Roman",Times,serif;
+    background:#000 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><text x='0' y='20' font-size='18' fill='%23ffff00'>*</text><text x='20' y='36' font-size='14' fill='%2300ffff'>.</text></svg>");
+    color:#ff0;
+    text-align:center;
+    margin:0;padding:0;
+  }
+  a{color:#0ff}
+  a:visited{color:#f0f}
+  .blink{animation:blink 1s step-end infinite}
+  .rainbow{animation:rainbow 2s linear infinite;font-weight:bold}
+  h1{font-size:48px;margin:10px 0;color:#f0f;text-shadow:3px 3px 0 #0ff}
+  marquee{background:#00f;color:#ff0;font-family:"Comic Sans MS",cursive;padding:4px;border:2px ridge #f0f}
+  table.frame{margin:12px auto;background:#808080;border:4px outset #c0c0c0;padding:8px}
+  table.content{background:#000080;color:#fff;border:3px inset #000;padding:10px;width:560px;max-width:95vw}
+  hr.rainbow{height:6px;border:0;background:linear-gradient(90deg,red,orange,yellow,green,cyan,blue,magenta,red)}
+  input[name=q]{
+    font-family:"Comic Sans MS",cursive;font-size:18px;padding:6px;width:80%;
+    background:#fff;color:#000;border:3px inset #c0c0c0
+  }
+  button{
+    font-family:"Comic Sans MS",cursive;font-size:16px;padding:6px 14px;
+    background:#c0c0c0;color:#000;border:3px outset #fff;cursor:pointer;margin-top:8px
+  }
+  button:active{border-style:inset}
+  .construction{font-family:monospace;color:#ff0;background:#000;padding:6px;border:2px dashed #ff0;display:inline-block;margin:10px 0}
+  .counter{font-family:"Courier New",monospace;background:#000;color:#0f0;border:2px inset #444;padding:2px 8px;letter-spacing:4px}
+  .webring{font-size:12px;color:#ccc;margin-top:16px}
+  .webring a{color:#ff0}
+  .badges{margin:10px 0}
+  .badges span{display:inline-block;background:#000;color:#0f0;border:2px solid #0f0;padding:2px 6px;font-family:monospace;font-size:10px;margin:2px}
 </style></head>
 <body>
-<h1>ui from your input</h1>
-<p>Write something (max 40 chars). An LLM writes the UI. Click links to go deeper.</p>
+<marquee scrollamount="8">&#9733; &#9733; &#9733; WELCOME TO MY HOMEPAGE &#9733; &#9733; &#9733; YOU ARE VISITOR #000001337 &#9733; &#9733; &#9733; PLEASE SIGN MY GUESTBOOK &#9733; &#9733; &#9733; BEST VIEWED IN NETSCAPE NAVIGATOR 4.0 AT 800x600 &#9733; &#9733; &#9733;</marquee>
+
+<table class="frame"><tr><td>
+<table class="content"><tr><td>
+
+<h1>~ UI FROM YOUR INPUT ~</h1>
+<p class="rainbow">&laquo;&laquo; A G E N E R A T I V E H Y P E R T E X T E X P E R I E N C E &raquo;&raquo;</p>
+
+<hr class="rainbow">
+
+<p><b>Greetings, cybernaut!</b> &#128187;<br>
+Type up to <span class="blink">40 characters</span> below.<br>
+A <i>real artificial intelligence</i> will craft your HTML page!!<br>
+Then <b>CLICK THE LINKS</b> to dive deeper into the web-of-the-future.</p>
+
+<div class="construction">
+[!] UNDER ETERNAL CONSTRUCTION [!]<br>
+&lt;&lt;&lt; &gt;&gt;&gt;
+</div>
+
 <form action="/g" method="get">
-  <input name="q" maxlength="40" autofocus required placeholder="e.g. weather app for dragons">
-  <small>no input after this — only clicks. <a href="https://github.com/Zoney/ui-from-your-input">source</a></small>
+  <p><input name="q" maxlength="40" autofocus required placeholder="type ur wish, max 40 chars"></p>
+  <p><button type="submit">&gt;&gt; ENTER THE PAGE &lt;&lt;</button></p>
 </form>
+
+<hr class="rainbow">
+
+<p>Visitors since 1997:<br><span class="counter">0000042</span></p>
+
+<div class="badges">
+  <span>MADE WITH NOTEPAD</span>
+  <span>HTML 3.2</span>
+  <span>NETSCAPE NOW!</span>
+  <span>POWERED BY GROQ</span>
+</div>
+
+<p class="webring">
+&laquo; <a href="/">PREV</a> &bull; <a href="https://github.com/Zoney/ui-from-your-input">[ SOURCE ]</a> &bull; <a href="/">NEXT</a> &raquo;<br>
+part of the <b class="rainbow">AI-GENERATED WEB RING</b>
+</p>
+
+<p style="font-size:10px;color:#aaa">&copy; MCMXCVII &mdash; no rights reserved &mdash; <span class="blink">*</span> e-mail the webmaster <span class="blink">*</span></p>
+
+</td></tr></table>
+</td></tr></table>
 </body></html>`))
 
 var pageTmpl = template.Must(template.New("p").Parse(`<!doctype html>
