@@ -53,6 +53,28 @@ func envInt(k string, d int) int {
 	return d
 }
 
+const urlSystemPrompt = `You invent a fake URL for a fictional 1990s GeoCities-style website that matches the user's wish.
+
+Output EXACTLY one URL, nothing else — no quotes, no prose, no leading slash, no scheme (no http://).
+
+Format: domain.tld[/path[/subpath]][?key=value]
+- First segment must be a domain ending in a TLD. Real (.com .net .org) or fictional (.zone .ring .fun .wiki .news .biz .pixel) — be creative.
+- Total length under 60 characters.
+- Evocative of the wish. Use lowercase, ASCII only, no spaces, no emoji.
+
+EXAMPLES
+wish: dragons
+output: scalesandfire.ring
+
+wish: weather app for dragons
+output: wingcast.news/today?mood=stormy
+
+wish: random screen selector
+output: pick-a-pixel.zone/roulette?seed=42
+
+wish: a bookstore
+output: inkwell.biz/fiction?sort=new`
+
 const systemPrompt = `You generate an HTML page for a simulated URL on a 1990s-style generative web.
 
 USER MESSAGE: a URL of the form  domain.tld/path/subpath?key=value
@@ -149,16 +171,20 @@ func handleGenerated(w http.ResponseWriter, r *http.Request) {
 }
 
 func generate(prompt string) (string, error) {
+	return callModel(systemPrompt, prompt, maxTokens)
+}
+
+func callModel(sys, user string, mt int) (string, error) {
 	if !limiter.allow() {
 		return "", fmt.Errorf("global rate limit hit (%d tokens/min). try again in a minute.", tokensPerMin)
 	}
 	body, _ := json.Marshal(chatReq{
 		Model: apiModel,
 		Messages: []message{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: prompt},
+			{Role: "system", Content: sys},
+			{Role: "user", Content: user},
 		},
-		MaxTokens: maxTokens,
+		MaxTokens: mt,
 	})
 	req, _ := http.NewRequest("POST", apiURL, bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+apiKey)
@@ -184,6 +210,31 @@ func generate(prompt string) (string, error) {
 	return cr.Choices[0].Message.Content, nil
 }
 
+func inventURL(wish string) (string, error) {
+	raw, err := callModel(urlSystemPrompt, wish, 64)
+	if err != nil {
+		return "", err
+	}
+	raw = strings.TrimSpace(raw)
+	if i := strings.IndexByte(raw, '\n'); i >= 0 {
+		raw = raw[:i]
+	}
+	raw = strings.Trim(raw, "`\"' \t")
+	raw = strings.TrimPrefix(raw, "http://")
+	raw = strings.TrimPrefix(raw, "https://")
+	raw = strings.TrimLeft(raw, "/")
+	if i := strings.IndexAny(raw, " \t\r"); i >= 0 {
+		raw = raw[:i]
+	}
+	if len(raw) > 100 {
+		raw = raw[:100]
+	}
+	if raw == "" || !strings.ContainsRune(strings.SplitN(raw, "/", 2)[0], '.') {
+		return "", fmt.Errorf("couldn't invent a URL from that wish")
+	}
+	return raw, nil
+}
+
 var indexTmpl = template.Must(template.New("i").Parse(`<!doctype html>
 <html><head><meta charset="utf-8"><title>~ UI FROM YOUR INPUT ~ :: Welcome!!! ::</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -206,7 +257,7 @@ var indexTmpl = template.Must(template.New("i").Parse(`<!doctype html>
   table.frame{margin:12px auto;background:#808080;border:4px outset #c0c0c0;padding:8px}
   table.content{background:#000080;color:#fff;border:3px inset #000;padding:10px;width:560px;max-width:95vw}
   hr.rainbow{height:6px;border:0;background:linear-gradient(90deg,red,orange,yellow,green,cyan,blue,magenta,red)}
-  input[name=url]{
+  input[name=wish]{
     font-family:"Comic Sans MS",cursive;font-size:18px;padding:6px;width:80%;
     background:#fff;color:#000;border:3px inset #c0c0c0
   }
@@ -234,18 +285,18 @@ var indexTmpl = template.Must(template.New("i").Parse(`<!doctype html>
 <hr class="rainbow">
 
 <p><b>Greetings, cybernaut!</b> &#128187;<br>
-Type any <span class="blink">URL</span> (max 40 chars) &mdash; a fake domain,<br>
-maybe a path, maybe some query params.<br>
-A <i>real artificial intelligence</i> will invent the page that lives there!!<br>
-Then <b>CLICK THE LINKS</b> to browse the web-that-never-was.</p>
+Type a wish &mdash; up to <span class="blink">40 characters</span>.<br>
+A <i>real artificial intelligence</i> will invent a URL for it,<br>
+then invent the page that lives at that URL!!<br>
+After that &mdash; just <b>CLICK THE LINKS</b> to browse the web-that-never-was.</p>
 
 <div class="construction">
-[!] TRY: dragons.news &bull; shop.biz/widgets?sale=1 &bull; pixel.zone/art [!]
+[!] TRY: dragons &bull; weather app for dragons &bull; a bookstore [!]
 </div>
 
 <form action="/go" method="get">
-  <p><input name="url" maxlength="40" autofocus required placeholder="e.g. dragons.news/articles?hot=1" spellcheck="false"></p>
-  <p><button type="submit">&gt;&gt; VISIT THIS URL &lt;&lt;</button></p>
+  <p><input name="wish" maxlength="40" autofocus required placeholder="type ur wish, max 40 chars" spellcheck="false"></p>
+  <p><button type="submit">&gt;&gt; INVENT MY URL &lt;&lt;</button></p>
 </form>
 
 <hr class="rainbow">
@@ -304,7 +355,7 @@ var pageTmpl = template.Must(template.New("p").Parse(`<!doctype html>
 <div class="navbar">
   <a href="/">&#127968; HOME</a> &bull;
   <span style="font-family:'Courier New',monospace;background:#fff;color:#000;padding:2px 6px;border:2px inset #808080">http://{{.URL}}</span> &bull;
-  <a href="/">&larr; NEW URL</a> &bull;
+  <a href="/">&larr; NEW WISH</a> &bull;
   <a href="https://github.com/Zoney/ui-from-your-input">[ SOURCE ]</a>
 </div>
 <table><tr><td class="content">
@@ -350,16 +401,21 @@ func main() {
 			fmt.Fprint(w, "User-agent: *\nDisallow: /\n")
 			return
 		case "/go":
-			target := strings.TrimSpace(r.URL.Query().Get("url"))
-			if target == "" {
+			wish := strings.TrimSpace(r.URL.Query().Get("wish"))
+			if wish == "" {
 				http.Redirect(w, r, "/", http.StatusFound)
 				return
 			}
-			if rn := []rune(target); len(rn) > maxPromptChars {
-				target = string(rn[:maxPromptChars])
+			if rn := []rune(wish); len(rn) > maxPromptChars {
+				wish = string(rn[:maxPromptChars])
 			}
-			target = "/" + strings.TrimLeft(target, "/")
-			http.Redirect(w, r, target, http.StatusFound)
+			target, err := inventURL(wish)
+			if err != nil {
+				w.WriteHeader(http.StatusBadGateway)
+				errTmpl.Execute(w, err.Error())
+				return
+			}
+			http.Redirect(w, r, "/"+target, http.StatusFound)
 			return
 		}
 		handleGenerated(w, r)
