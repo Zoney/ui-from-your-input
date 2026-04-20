@@ -14,7 +14,10 @@ import (
 	"time"
 )
 
-const maxPromptChars = 40
+const (
+	maxPromptChars = 40  // initial seed URL length
+	maxURLChars    = 400 // upper bound on any generated URL we'll send to the model
+)
 
 var (
 	apiURL       = envStr("INFERENCE_URL", "https://api.groq.com/openai/v1/chat/completions")
@@ -50,22 +53,28 @@ func envInt(k string, d int) int {
 	return d
 }
 
-const systemPrompt = `You generate HTML UI fragments from a short user prompt.
+const systemPrompt = `You generate an HTML page for a simulated URL on a 1990s-style generative web.
 
-Output ONLY raw HTML — no markdown fences, no explanations, no <!doctype>, no <html>/<head>/<body> tags. Just the inner body content.
+USER MESSAGE: a URL of the form  domain.tld/path/subpath?key=value
+- The first segment is the "domain" and MUST end in a TLD — real (.com .net .org) or fictional (.zone .ring .fun .wiki .news .biz .pixel are all fair game).
+- Path, sub-paths, and query params describe what this specific page is about. Invent plausible content that lives at exactly that address.
+- If there is no path beyond the domain, treat it as the site's home page and tease what's inside.
 
-STYLE — match a 1990s GeoCities-era personal website:
-- Tone: enthusiastic, exclamatory, ALL CAPS OK, lots of ~*~sparkles~*~.
-- Fonts: "Times New Roman" or "Comic Sans MS". Bright colors on dark or garish backgrounds.
-- Use <marquee>, <center>, <blink> (or a .blink class), tiled bevelled <table> layouts, rainbow <hr>, and <font color> if you like.
-- Use ASCII art and emoji/unicode symbols (&#9733; &#128187; &#9829;) instead of image URLs — never reference external images.
-- Embed a small inline <style> block that fits the 90s theme.
+OUTPUT: ONLY raw HTML — body content. No markdown fences, no explanations, no <!doctype>, no <html>/<head>/<body> tags.
 
-INTERACTION:
-- Clickable links use <a href="/g?q=URL_ENCODED_PROMPT">text</a>. Each q must be a URL-encoded prompt of at most 40 characters describing what the user sees when they click.
-- Links are the only way the user can continue — the rendered page cannot accept text input. Offer several interesting paths.
-- Avoid <script> tags, <form>s, and external assets. Stick to the /g?q= link pattern.
-- Be creative; this is an exploratory, generative hypertext experience.`
+STYLE — 1990s GeoCities personal website:
+- Enthusiastic, exclamatory tone. ALL CAPS OK. ~*~sparkles~*~.
+- "Times New Roman" or "Comic Sans MS". Bright colors on dark/garish backgrounds.
+- Use <marquee>, <center>, <blink> (or a .blink class), bevelled <table> layouts, rainbow <hr>, <font color>.
+- Use ASCII art and emoji/unicode (&#9733; &#128187; &#9829;) instead of images — NEVER reference external image URLs.
+- Small inline <style> is fine.
+
+LINKS — the only way the user can continue:
+- Every link MUST be an internal fake URL starting with "/" and whose first segment is a domain-with-TLD, e.g.  <a href="/dragons.news/articles/fire?heat=1000">
+- Prefer keeping same-site links on the CURRENT domain. Link to NEW fake domains sometimes for cross-site jumps.
+- Query params are welcome and will change what the clicked page looks like — use them (?sort=new, ?year=2026, ?color=red).
+- NO external URLs, NO <script>, NO <form>, NO external assets.
+- Offer several distinct paths to explore.`
 
 type rateLimiter struct {
 	mu          sync.Mutex
@@ -113,6 +122,30 @@ type chatResp struct {
 	Usage struct {
 		TotalTokens int `json:"total_tokens"`
 	} `json:"usage"`
+}
+
+func handleGenerated(w http.ResponseWriter, r *http.Request) {
+	addr := strings.TrimPrefix(r.URL.Path, "/")
+	if r.URL.RawQuery != "" {
+		addr += "?" + r.URL.RawQuery
+	}
+	if addr == "" {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	if len(addr) > maxURLChars {
+		addr = addr[:maxURLChars]
+	}
+	html, err := generate(addr)
+	if err != nil {
+		w.WriteHeader(http.StatusTooManyRequests)
+		errTmpl.Execute(w, err.Error())
+		return
+	}
+	pageTmpl.Execute(w, map[string]any{
+		"URL":  addr,
+		"HTML": template.HTML(html),
+	})
 }
 
 func generate(prompt string) (string, error) {
@@ -173,7 +206,7 @@ var indexTmpl = template.Must(template.New("i").Parse(`<!doctype html>
   table.frame{margin:12px auto;background:#808080;border:4px outset #c0c0c0;padding:8px}
   table.content{background:#000080;color:#fff;border:3px inset #000;padding:10px;width:560px;max-width:95vw}
   hr.rainbow{height:6px;border:0;background:linear-gradient(90deg,red,orange,yellow,green,cyan,blue,magenta,red)}
-  input[name=q]{
+  input[name=url]{
     font-family:"Comic Sans MS",cursive;font-size:18px;padding:6px;width:80%;
     background:#fff;color:#000;border:3px inset #c0c0c0
   }
@@ -201,18 +234,18 @@ var indexTmpl = template.Must(template.New("i").Parse(`<!doctype html>
 <hr class="rainbow">
 
 <p><b>Greetings, cybernaut!</b> &#128187;<br>
-Type up to <span class="blink">40 characters</span> below.<br>
-A <i>real artificial intelligence</i> will craft your HTML page!!<br>
-Then <b>CLICK THE LINKS</b> to dive deeper into the web-of-the-future.</p>
+Type any <span class="blink">URL</span> (max 40 chars) &mdash; a fake domain,<br>
+maybe a path, maybe some query params.<br>
+A <i>real artificial intelligence</i> will invent the page that lives there!!<br>
+Then <b>CLICK THE LINKS</b> to browse the web-that-never-was.</p>
 
 <div class="construction">
-[!] UNDER ETERNAL CONSTRUCTION [!]<br>
-&lt;&lt;&lt; &gt;&gt;&gt;
+[!] TRY: dragons.news &bull; shop.biz/widgets?sale=1 &bull; pixel.zone/art [!]
 </div>
 
-<form action="/g" method="get">
-  <p><input name="q" maxlength="40" autofocus required placeholder="type ur wish, max 40 chars"></p>
-  <p><button type="submit">&gt;&gt; ENTER THE PAGE &lt;&lt;</button></p>
+<form action="/go" method="get">
+  <p><input name="url" maxlength="40" autofocus required placeholder="e.g. dragons.news/articles?hot=1" spellcheck="false"></p>
+  <p><button type="submit">&gt;&gt; VISIT THIS URL &lt;&lt;</button></p>
 </form>
 
 <hr class="rainbow">
@@ -238,7 +271,7 @@ part of the <b class="rainbow">AI-GENERATED WEB RING</b>
 </body></html>`))
 
 var pageTmpl = template.Must(template.New("p").Parse(`<!doctype html>
-<html><head><meta charset="utf-8"><title>~ {{.Q}} ~ :: UIFYI ::</title>
+<html><head><meta charset="utf-8"><title>~ {{.URL}} ~ :: UIFYI ::</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   @keyframes blink{50%{visibility:hidden}}
@@ -265,12 +298,13 @@ var pageTmpl = template.Must(template.New("p").Parse(`<!doctype html>
   .footer{text-align:center;font-size:11px;color:#aaa;margin-top:14px;border-top:1px dotted #888;padding-top:8px}
 </style></head>
 <body>
-<marquee scrollamount="8">&#9733; NOW VIEWING: &laquo;{{.Q}}&raquo; &#9733; CLICK THE LINKS TO EXPLORE &#9733; PART OF THE AI-GENERATED WEB RING &#9733; BEST VIEWED IN NETSCAPE NAVIGATOR 4.0 &#9733;</marquee>
+<marquee scrollamount="8">&#9733; NOW VIEWING: &laquo;/{{.URL}}&raquo; &#9733; CLICK THE LINKS TO EXPLORE &#9733; PART OF THE AI-GENERATED WEB RING &#9733; BEST VIEWED IN NETSCAPE NAVIGATOR 4.0 &#9733;</marquee>
 
 <table class="frame"><tr><td>
 <div class="navbar">
   <a href="/">&#127968; HOME</a> &bull;
-  <a href="/">&larr; NEW WISH</a> &bull;
+  <span style="font-family:'Courier New',monospace;background:#fff;color:#000;padding:2px 6px;border:2px inset #808080">http://{{.URL}}</span> &bull;
+  <a href="/">&larr; NEW URL</a> &bull;
   <a href="https://github.com/Zoney/ui-from-your-input">[ SOURCE ]</a>
 </div>
 <table><tr><td class="content">
@@ -280,7 +314,7 @@ var pageTmpl = template.Must(template.New("p").Parse(`<!doctype html>
 <div class="footer">
 <hr>
 <span class="blink">*</span> <span class="rainbow">~ UI FROM YOUR INPUT ~</span> <span class="blink">*</span><br>
-&copy; MCMXCVII &mdash; page freshly generated by a <b>real A.I.</b> &mdash; sign the <a href="/g?q=guestbook">guestbook</a>!
+&copy; MCMXCVII &mdash; page freshly generated by a <b>real A.I.</b> &mdash; sign the <a href="/homeworld.zone/guestbook">guestbook</a>!
 </div>
 
 </td></tr></table>
@@ -304,32 +338,31 @@ var errTmpl = template.Must(template.New("e").Parse(`<!doctype html>
 
 func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
+		switch r.URL.Path {
+		case "/":
+			indexTmpl.Execute(w, nil)
+			return
+		case "/favicon.ico":
 			http.NotFound(w, r)
 			return
-		}
-		indexTmpl.Execute(w, nil)
-	})
-
-	http.HandleFunc("/g", func(w http.ResponseWriter, r *http.Request) {
-		q := strings.TrimSpace(r.URL.Query().Get("q"))
-		if q == "" {
-			http.Redirect(w, r, "/", http.StatusFound)
+		case "/robots.txt":
+			w.Header().Set("Content-Type", "text/plain")
+			fmt.Fprint(w, "User-agent: *\nDisallow: /\n")
+			return
+		case "/go":
+			target := strings.TrimSpace(r.URL.Query().Get("url"))
+			if target == "" {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+			if rn := []rune(target); len(rn) > maxPromptChars {
+				target = string(rn[:maxPromptChars])
+			}
+			target = "/" + strings.TrimLeft(target, "/")
+			http.Redirect(w, r, target, http.StatusFound)
 			return
 		}
-		if len([]rune(q)) > maxPromptChars {
-			q = string([]rune(q)[:maxPromptChars])
-		}
-		html, err := generate(q)
-		if err != nil {
-			w.WriteHeader(http.StatusTooManyRequests)
-			errTmpl.Execute(w, err.Error())
-			return
-		}
-		pageTmpl.Execute(w, map[string]any{
-			"Q":    q,
-			"HTML": template.HTML(html),
-		})
+		handleGenerated(w, r)
 	})
 
 	if apiKey == "" {

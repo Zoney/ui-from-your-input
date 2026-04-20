@@ -1,6 +1,6 @@
 # ui from your input
 
-Type up to 40 characters. An LLM writes the HTML. Click links to go deeper — each click generates a new page. No other input, only clicks.
+Type a URL — any URL. `dragons.news`, `shop.biz/widgets?sale=1`, `pixel.zone/gallery/2026` — doesn't have to be real, doesn't have to resolve. An LLM invents the page that "lives" at that address. Every link on the page is another fake URL on this generative web; click one and that page gets generated on the spot. No other input after the first URL, only clicks.
 
 Default backend is [Groq](https://console.groq.com/docs/model/llama-3.1-8b-instant) (`llama-3.1-8b-instant`) — it's fast. Any OpenAI-compatible endpoint works; see env vars below. ~200 lines of Go, stdlib only.
 
@@ -36,10 +36,12 @@ Swap providers by changing `INFERENCE_URL` + `INFERENCE_MODEL` + key — e.g. po
 
 ## How it works
 
-1. `/` shows a single text input.
-2. Submit → `/g?q=<prompt>` asks Groq for raw HTML.
-3. The system prompt instructs the model to return links as `<a href="/g?q=...">` so every click generates the next page.
-4. The returned HTML is injected into a minimal wrapper and rendered.
+1. `/` shows a single text input. You type a URL (max 40 chars), e.g. `dragons.news/articles?hot=1`.
+2. `/go` redirects to the typed path.
+3. Any non-root path is a catch-all: the server feeds the URL (path + query) to Groq as the user message; the system prompt tells the model it's an address on a fake 1990s generative web and to invent a page for it.
+4. The model is told to make every link another internal URL like `/domain.tld/path?x=y`, so clicking a link just triggers the catch-all again and generates the next page.
+5. Returned HTML is wrapped in a 90s GeoCities-style chrome (marquee, rainbow rule, beveled tables).
+6. `/robots.txt` disallows all crawlers so bots don't burn through the TPM cap.
 
 That's all.
 
