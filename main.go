@@ -20,11 +20,11 @@ const (
 )
 
 var (
-	apiURL       = envStr("INFERENCE_URL", "https://api.groq.com/openai/v1/chat/completions")
-	apiModel     = envStr("INFERENCE_MODEL", "llama-3.1-8b-instant")
-	apiKey       = firstNonEmpty(os.Getenv("GROQ_API_KEY"), os.Getenv("INFERENCE_API_KEY"), os.Getenv("NVIDIA_API_KEY"))
-	maxTokens    = envInt("MAX_TOKENS", 2048)
-	tokensPerMin = envInt("TPM_LIMIT", 6000)
+	apiURL       = envStr("INFERENCE_URL", "https://ai-gateway.vercel.sh/v1/chat/completions")
+	apiModel     = envStr("INFERENCE_MODEL", "xai/grok-4-fast-non-reasoning")
+	apiKey       = firstNonEmpty(os.Getenv("AI_GATEWAY_API_KEY"), os.Getenv("INFERENCE_API_KEY"), os.Getenv("GROQ_API_KEY"), os.Getenv("NVIDIA_API_KEY"))
+	maxTokens    = envInt("MAX_TOKENS", 4096)
+	tokensPerMin = envInt("TPM_LIMIT", 1_000_000)
 )
 
 func envStr(k, d string) string {
@@ -307,7 +307,7 @@ After that &mdash; just <b>CLICK THE LINKS</b> to browse the web-that-never-was.
   <span>MADE WITH NOTEPAD</span>
   <span>HTML 3.2</span>
   <span>NETSCAPE NOW!</span>
-  <span>POWERED BY GROQ</span>
+  <span>POWERED BY A.I.</span>
 </div>
 
 <p class="webring">
@@ -422,7 +422,7 @@ func main() {
 	})
 
 	if apiKey == "" {
-		log.Println("warn: no API key set (GROQ_API_KEY / INFERENCE_API_KEY) — /g requests will fail")
+		log.Println("warn: no API key set (AI_GATEWAY_API_KEY / INFERENCE_API_KEY) — generation will fail")
 	}
 	port := os.Getenv("PORT")
 	if port == "" {

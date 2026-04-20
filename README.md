@@ -2,37 +2,39 @@
 
 Type a wish — a word, a phrase, anything, up to 40 characters. The LLM invents a URL for your wish (`dragons` → `scalesandfire.ring`) and then invents the page that "lives" at that URL. Every link on the page is another fake URL on this generative web; click one and that page gets generated on the spot. After the first wish, no more typing — only clicks.
 
-Default backend is [Groq](https://console.groq.com/docs/model/llama-3.1-8b-instant) (`llama-3.1-8b-instant`) — it's fast. Any OpenAI-compatible endpoint works; see env vars below. ~200 lines of Go, stdlib only.
+Default backend is [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) — one key, many providers and models behind an OpenAI-compatible endpoint. Default model is `xai/grok-4-fast-non-reasoning` (fast + cheap); swap in any [listed model](https://vercel.com/ai-gateway/models) via env. ~200 lines of Go, stdlib only.
 
 ## Run locally
 
 ```sh
-export GROQ_API_KEY=gsk_...
+export AI_GATEWAY_API_KEY=vckg_...
 go run .
 # open http://localhost:8080
 ```
+
+Get a key at <https://vercel.com/dashboard/ai-gateway/api-keys>.
 
 ## Deploy (Railway, Fly, anything with Docker)
 
 ```sh
 docker build -t ui-from-your-input .
-docker run -e GROQ_API_KEY=gsk_... -p 8080:8080 ui-from-your-input
+docker run -e AI_GATEWAY_API_KEY=vckg_... -p 8080:8080 ui-from-your-input
 ```
 
-On Railway: new project → deploy from GitHub repo → set `GROQ_API_KEY`. The Dockerfile is picked up automatically.
+On Railway: new project → deploy from GitHub repo → set `AI_GATEWAY_API_KEY`. The Dockerfile is picked up automatically.
 
 ## Configuration
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
-| `GROQ_API_KEY` / `INFERENCE_API_KEY` | _(required)_ | Bearer token sent to the inference endpoint. |
-| `INFERENCE_URL` | `https://api.groq.com/openai/v1/chat/completions` | OpenAI-compatible chat completions endpoint. |
-| `INFERENCE_MODEL` | `llama-3.1-8b-instant` | Model id passed in the request body. |
-| `MAX_TOKENS` | `2048` | `max_tokens` per request. Must fit inside the provider's per-request TPM budget. |
-| `TPM_LIMIT` | `6000` | Global tokens/min cap across all users (matches Groq's free tier). Returns 429 when hit. |
+| `AI_GATEWAY_API_KEY` / `INFERENCE_API_KEY` | _(required)_ | Bearer token sent to the inference endpoint. |
+| `INFERENCE_URL` | `https://ai-gateway.vercel.sh/v1/chat/completions` | OpenAI-compatible chat completions endpoint. |
+| `INFERENCE_MODEL` | `xai/grok-4-fast-non-reasoning` | Model id passed in the request body. Any AI Gateway model works, e.g. `openai/gpt-5.4-mini`, `anthropic/claude-haiku-4.5`, `google/gemini-2.5-flash`. |
+| `MAX_TOKENS` | `4096` | `max_tokens` per request. |
+| `TPM_LIMIT` | `1000000` | Global tokens/min cap across all users. Returns 429 when hit. |
 | `PORT` | `8080` | HTTP listen port. |
 
-Swap providers by changing `INFERENCE_URL` + `INFERENCE_MODEL` + key — e.g. point at OpenRouter, NVIDIA build, a self-hosted vLLM, etc. Bump `MAX_TOKENS` / `TPM_LIMIT` on paid tiers. Prompt is always capped to 40 characters server-side.
+Swap providers by changing `INFERENCE_URL` + `INFERENCE_MODEL` + key — point at Groq, OpenAI, NVIDIA build, a self-hosted vLLM, anything OpenAI-compatible. Initial wish is always capped to 40 characters server-side.
 
 ## How it works
 
