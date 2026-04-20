@@ -21,7 +21,7 @@ const (
 
 var (
 	apiURL       = envStr("INFERENCE_URL", "https://ai-gateway.vercel.sh/v1/chat/completions")
-	apiModel     = envStr("INFERENCE_MODEL", "xai/grok-4-fast-non-reasoning")
+	apiModel     = envStr("INFERENCE_MODEL", "mistral/ministral-3b")
 	apiKey       = firstNonEmpty(os.Getenv("AI_GATEWAY_API_KEY"), os.Getenv("INFERENCE_API_KEY"), os.Getenv("GROQ_API_KEY"), os.Getenv("NVIDIA_API_KEY"))
 	maxTokens    = envInt("MAX_TOKENS", 4096)
 	tokensPerMin = envInt("TPM_LIMIT", 1_000_000)
